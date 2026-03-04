@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { getProfile } from "@/app/actions/profile";
 import { ProfileForm } from "@/components/profile-form";
-import { QRStickerBuilder } from "@/components/qr-sticker-builder";
+import { QRStudio } from "@/components/qr-studio/qr-studio";
 import { redirect } from "next/navigation";
 import { nanoid } from "nanoid";
 
@@ -91,8 +91,23 @@ export default async function DashboardPage({
 
         {profile && (
           <section>
-            <QRStickerBuilder
-              slug={profile.qrSlug}
+            <div className="mb-6 space-y-1">
+              <h2 className="text-2xl font-bold tracking-tight">
+                Sticker Studio
+              </h2>
+              <p className="text-muted-foreground">
+                Design your printable safe sticker by adding backgrounds, text,
+                and moving your QR code.
+              </p>
+            </div>
+
+            {/* The profileUrl handles development fallback via env or hardcoded standard */}
+            <QRStudio
+              qrUrl={
+                process.env.NEXT_PUBLIC_APP_URL
+                  ? `${process.env.NEXT_PUBLIC_APP_URL}/r/${profile.qrSlug}`
+                  : `https://rider.safe/r/${profile.qrSlug}`
+              }
               defaultName={profile.fullName}
             />
           </section>
