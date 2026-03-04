@@ -10,7 +10,10 @@ import { revalidatePath } from "next/cache";
 
 const prisma = new PrismaClient();
 
-export async function saveProfile(data: ProfileFormValues) {
+export async function saveProfile(
+  data: ProfileFormValues,
+  enrollQrId?: string,
+) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -85,10 +88,30 @@ export async function saveProfile(data: ProfileFormValues) {
       });
     }
 
+    // Link enrolled QR code if provided
+    if (enrollQrId) {
+      const qrMapping = await prisma.qrMapping.findUnique({
+        where: { qrId: enrollQrId },
+      });
+
+      if (qrMapping && !qrMapping.slug) {
+        await prisma.qrMapping.update({
+          where: { qrId: enrollQrId },
+          data: { slug: qrSlug },
+        });
+        console.log(`Linked QR ID ${enrollQrId} to slug ${qrSlug}`);
+      }
+    }
+
     revalidatePath("/dashboard");
+    revalidatePath(`/admin`);
     revalidatePath(`/r/${qrSlug}`);
 
-    return { success: true, message: "Profile saved successfully" };
+    return {
+      success: true,
+      message: "Profile saved successfully",
+      slug: qrSlug,
+    };
   } catch (error) {
     console.error("Save profile error:", error);
     return {

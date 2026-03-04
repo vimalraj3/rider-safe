@@ -39,14 +39,18 @@ import { Separator } from "@/components/ui/separator";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import { Trash2, Plus, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 export function ProfileForm({
   initialData,
+  enrollQrId,
 }: {
   initialData?: Partial<ProfileFormValues> | null;
+  enrollQrId?: string;
 }) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -82,9 +86,14 @@ export function ProfileForm({
 
   function onSubmit(data: ProfileFormValues) {
     startTransition(async () => {
-      const result = await saveProfile(data);
+      const result = await saveProfile(data, enrollQrId);
       if (result.success) {
         toast.success(result.message);
+        if (result.slug && enrollQrId) {
+          router.push(`/r/${result.slug}`);
+        } else {
+          router.refresh();
+        }
       } else {
         toast.error(result.error);
         if (result.errors) {
