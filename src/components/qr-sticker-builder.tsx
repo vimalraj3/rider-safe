@@ -28,7 +28,7 @@ export function QRStickerBuilder({
   const profileUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/r/${slug}`
-      : `https://rider.safe/r/${slug}`;
+      : `https://bikerider.in/r/${slug}`;
 
   useEffect(() => {
     if (canvasRef.current) {

@@ -106,7 +106,7 @@ export default async function DashboardPage({
               qrUrl={
                 process.env.NEXT_PUBLIC_APP_URL
                   ? `${process.env.NEXT_PUBLIC_APP_URL}/r/${profile.qrSlug}`
-                  : `https://rider.safe/r/${profile.qrSlug}`
+                  : `https://bikerider.in/r/${profile.qrSlug}`
               }
               defaultName={profile.fullName}
             />

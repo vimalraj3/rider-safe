@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import html2canvas from "html2canvas-pro";
+import * as htmlToImage from "html-to-image";
 import { CanvasState, CanvasElement } from "./types";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,11 @@ import {
   Type,
   Settings2,
   Trash2,
+  ArrowUp,
+  ArrowDown,
+  Layers,
 } from "lucide-react";
+import { ImageCropModal } from "./image-crop-modal";
 
 export function QRStudio({
   qrUrl,
@@ -26,6 +30,10 @@ export function QRStudio({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [isCroppingBg, setIsCroppingBg] = useState(false);
 
   const [state, setState] = useState<CanvasState>({
     width: 320,
@@ -82,16 +90,17 @@ export function QRStudio({
     await new Promise((r) => setTimeout(r, 100));
 
     try {
-      const canvas = await html2canvas(canvasRef.current, {
-        scale: 3, // High-res export
-        useCORS: true,
-        allowTaint: true,
+      const dataUrl = await htmlToImage.toPng(canvasRef.current, {
+        pixelRatio: 3, // High-res export
         backgroundColor: state.backgroundColor,
+        style: {
+          transform: "scale(1)",
+          transformOrigin: "top left",
+        },
       });
 
-      const image = canvas.toDataURL("image/png");
       const a = document.createElement("a");
-      a.href = image;
+      a.href = dataUrl;
       a.download = `ridersafe-qr-${Date.now()}.png`;
       a.click();
     } catch (e) {
@@ -145,8 +154,17 @@ export function QRStudio({
     if (!file) return;
 
     const url = URL.createObjectURL(file);
-    if (isBackground) {
-      setState((prev) => ({ ...prev, backgroundImage: url }));
+    setIsCroppingBg(isBackground);
+    setCropImageSrc(url);
+    setCropModalOpen(true);
+
+    // Reset input so the same file can be selected again if needed
+    e.target.value = "";
+  };
+
+  const handleCropComplete = (croppedUrl: string) => {
+    if (isCroppingBg) {
+      setState((prev) => ({ ...prev, backgroundImage: croppedUrl }));
     } else {
       setState((prev) => ({
         ...prev,
@@ -157,14 +175,40 @@ export function QRStudio({
             type: "image",
             x: 50,
             y: 50,
-            width: 100,
-            height: 100,
+            width: 150,
+            height: 150,
             zIndex: Math.max(...prev.elements.map((e) => e.zIndex), 10) + 1,
-            src: url,
+            src: croppedUrl,
           },
         ],
       }));
     }
+    setCropModalOpen(false);
+    setCropImageSrc(null);
+  };
+
+  const moveLayer = (index: number, direction: "up" | "down") => {
+    setState((prev) => {
+      const newElements = [...prev.elements];
+      if (direction === "up" && index < newElements.length - 1) {
+        // swap with next
+        const temp = newElements[index];
+        newElements[index] = newElements[index + 1];
+        newElements[index + 1] = temp;
+      } else if (direction === "down" && index > 0) {
+        // swap with previous
+        const temp = newElements[index];
+        newElements[index] = newElements[index - 1];
+        newElements[index - 1] = temp;
+      }
+
+      // Reassign zIndexes to match array order
+      const ordered = newElements.map((el, idx) => ({
+        ...el,
+        zIndex: 10 + idx,
+      }));
+      return { ...prev, elements: ordered };
+    });
   };
 
   const selectedElement = state.elements.find((e) => e.id === selectedId);
@@ -185,9 +229,38 @@ export function QRStudio({
         <div className="p-4 space-y-6 flex-1 overflow-y-auto">
           {/* Global Canvas Settings */}
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Background
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center justify-between">
+              <span>Canvas</span>
             </h4>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs mb-1 block">Width (px)</Label>
+                <Input
+                  type="number"
+                  value={state.width}
+                  onChange={(e) =>
+                    setState((prev) => ({
+                      ...prev,
+                      width: Number(e.target.value) || 320,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Height (px)</Label>
+                <Input
+                  type="number"
+                  value={state.height}
+                  onChange={(e) =>
+                    setState((prev) => ({
+                      ...prev,
+                      height: Number(e.target.value) || 480,
+                    }))
+                  }
+                />
+              </div>
+            </div>
 
             <div>
               <Label className="text-xs mb-1 block">Solid Color</Label>
@@ -263,6 +336,64 @@ export function QRStudio({
               </div>
             </div>
           </div>
+
+          {/* Layers UI */}
+          {state.elements.length > 0 && (
+            <div className="space-y-3 pt-4 border-t border-dashed border-primary/20">
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                <Layers className="w-4 h-4" /> Layers
+              </h4>
+              <div className="space-y-1">
+                {/* Render in reverse so top layers are visually at top of list */}
+                {[...state.elements].reverse().map((el, reversedIdx) => {
+                  const actualIdx = state.elements.length - 1 - reversedIdx;
+                  const isSelected = selectedId === el.id;
+
+                  return (
+                    <div
+                      key={el.id}
+                      className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer transition-colors ${isSelected ? "bg-primary/10 border-primary/30" : "bg-background hover:bg-muted/50"}`}
+                      onClick={() => setSelectedId(el.id)}
+                    >
+                      <span className="truncate flex-1 font-medium capitalize">
+                        {el.type === "qr"
+                          ? "QR Code"
+                          : el.type === "text"
+                            ? el.content?.substring(0, 15) || "Text"
+                            : "Image"}
+                      </span>
+                      <div className="flex items-center gap-1 opacity-70">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-5 h-5"
+                          disabled={actualIdx === state.elements.length - 1} // Can't go higher
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveLayer(actualIdx, "up");
+                          }}
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-5 h-5"
+                          disabled={actualIdx === 0} // Can't go lower
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveLayer(actualIdx, "down");
+                          }}
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Properties Panel (Contextual) */}
           {selectedElement && (
@@ -383,6 +514,13 @@ export function QRStudio({
           </p>
         )}
       </div>
+
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        onClose={() => setCropModalOpen(false)}
+        imageSrc={cropImageSrc}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 }

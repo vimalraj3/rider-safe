@@ -154,7 +154,7 @@ export function ProfileForm({
                       <Input placeholder="john-doe-safe" {...field} />
                     </FormControl>
                     <FormDescription>
-                      rider.safe/r/{field.value}
+                      bikerider.in/r/{field.value}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
